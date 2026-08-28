@@ -1,0 +1,65 @@
+name: Release Windows ZIP
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag, for example v0.6.0
+        required: true
+        default: v0.6.0
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows-zip:
+    name: Release Windows ZIP
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore AudioLoopbackRecorder.csproj
+
+      - name: Publish self-contained EXE
+        run: >
+          dotnet publish AudioLoopbackRecorder.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -o publish/win-x64
+
+      - name: Copy setup files
+        shell: pwsh
+        run: |
+          Copy-Item install-huddlescribe-protocol.ps1 publish/win-x64/
+          Copy-Item diagnose-huddlescribe.ps1 publish/win-x64/
+          Copy-Item README.md publish/win-x64/
+
+      - name: Create zip package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package | Out-Null
+          Compress-Archive -Path publish/win-x64/* -DestinationPath package/HuddleAudioCapture-win-x64.zip -Force
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag_name }}
+          name: Huddle Audio Capture ${{ inputs.tag_name }}
+          body: |
+            Windows package for Huddle Audio Capture.
+
+            Download HuddleAudioCapture-win-x64.zip from Assets, extract it, then run HuddleAudioCapture.exe.
+          files: package/HuddleAudioCapture-win-x64.zip
+          make_latest: true
