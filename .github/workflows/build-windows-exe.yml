@@ -34,8 +34,15 @@ jobs:
           -p:EnableCompressionInSingleFile=true
           -o publish/win-x64
 
+      - name: Copy setup files
+        shell: pwsh
+        run: |
+          Copy-Item install-huddlescribe-protocol.ps1 publish/win-x64/
+          Copy-Item diagnose-huddlescribe.ps1 publish/win-x64/
+          Copy-Item README.md publish/win-x64/
+
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
           name: HuddleAudioCapture-win-x64
-          path: publish/win-x64/HuddleAudioCapture.exe
+          path: publish/win-x64/
