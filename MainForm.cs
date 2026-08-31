@@ -18,6 +18,7 @@ sealed class MainForm : Form
     private readonly Label fileValueLabel = new();
     private readonly Label peakValueLabel = new();
     private readonly ProgressBar peakProgressBar = new();
+    private readonly TextBox transcriptTextBox = new();
     private readonly System.Windows.Forms.Timer durationTimer = new();
     private readonly IHuddleRecordingSender huddleSender = new HuddleRecordingSender();
     private readonly LocalRecordingService recordingService = new();
@@ -51,12 +52,13 @@ sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 6,
+            RowCount = 7,
             Padding = new Padding(16),
         };
         main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        main.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         main.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -133,6 +135,31 @@ sealed class MainForm : Form
         };
         main.Controls.Add(infoBox, 0, 3);
 
+        var transcriptPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = new Padding(0, 12, 0, 0),
+        };
+        transcriptPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        transcriptPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        main.Controls.Add(transcriptPanel, 0, 4);
+
+        transcriptPanel.Controls.Add(new Label
+        {
+            Text = "Transcript",
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, 6),
+        }, 0, 0);
+
+        transcriptTextBox.Dock = DockStyle.Fill;
+        transcriptTextBox.Multiline = true;
+        transcriptTextBox.ReadOnly = true;
+        transcriptTextBox.ScrollBars = ScrollBars.Vertical;
+        transcriptTextBox.Margin = new Padding(0);
+        transcriptPanel.Controls.Add(transcriptTextBox, 0, 1);
+
         var buttonPanel = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
@@ -140,7 +167,7 @@ sealed class MainForm : Form
             WrapContents = true,
             Margin = new Padding(0, 12, 0, 8),
         };
-        main.Controls.Add(buttonPanel, 0, 4);
+        main.Controls.Add(buttonPanel, 0, 5);
 
         ConfigureButton(startButton, "Start Recording", StartRecordingAsync);
         ConfigureButton(stopButton, "Stop Recording", StopRecordingAsync);
@@ -163,7 +190,7 @@ sealed class MainForm : Form
             Dock = DockStyle.Bottom,
             TextAlign = ContentAlignment.MiddleRight,
             AutoSize = true,
-        }, 0, 5);
+        }, 0, 6);
     }
 
     private void InitializeApp()
@@ -343,14 +370,33 @@ sealed class MainForm : Form
                 return;
             }
 
+            SetStatus("Transcribing...");
+            sendButton.Enabled = false;
+            startButton.Enabled = false;
+            newButton.Enabled = false;
+
             var result = await huddleSender.SendAsync(currentSession.AudioFilePath, currentSession.SessionId);
-            SetStatus("Recording ready for Huddle.");
-            MessageBox.Show(result.Message, "Huddle Audio Capture", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            transcriptTextBox.Text = result.Transcript;
+            SetStatus("Transcription Complete");
+            MessageBox.Show("Transcription completed successfully.", "Huddle Audio Capture", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
             SetStatus("Error");
             ShowError($"Recording is not ready for Huddle: {ex.Message}");
+        }
+        finally
+        {
+            var isRecording = recordingService.Status == "recording";
+            var hasCompletedAudibleRecording =
+                recordingCompleted
+                && currentSession is not null
+                && currentSession.AudibleAudioDetected;
+
+            startButton.Enabled = !isRecording && devices.Count > 0;
+            newButton.Enabled = !isRecording;
+            sendButton.Enabled = !isRecording && hasCompletedAudibleRecording;
+            deviceComboBox.Enabled = !isRecording;
         }
     }
 
@@ -453,6 +499,7 @@ sealed class MainForm : Form
         durationValueLabel.Text = "00:00:00";
         sessionValueLabel.Text = "";
         fileValueLabel.Text = "";
+        transcriptTextBox.Text = "";
     }
 
     private void SetStatus(string status)
