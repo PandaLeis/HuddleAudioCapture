@@ -164,6 +164,8 @@ internal static class Program
                 return 1;
             }
 
+            BridgeLogger.Log($"Protocol command received command={command} sessionId={sessionId}");
+
 
             // --------------------------------------------------------
             // TOKEN FILE EXISTS WHILE THE MAIN HELPER / BRIDGE
@@ -214,7 +216,7 @@ internal static class Program
                 new HttpClient(handler)
                 {
                     Timeout =
-                        TimeSpan.FromSeconds(15)
+                        TimeSpan.FromMinutes(3)
                 };
 
 
@@ -300,7 +302,6 @@ internal static class Program
                     return 1;
                 }
 
-
                 return 0;
             }
 
@@ -327,6 +328,38 @@ internal static class Program
 
                     ShowUriError(
                         "Unable to stop Huddle Scribe recording."
+                        +
+                        Environment.NewLine
+                        +
+                        Environment.NewLine
+                        +
+                        error
+                    );
+
+                    return 1;
+                }
+
+                using var transcribeResponse =
+                    await http.PostAsync(
+                        BuildBridgeUrl(
+                            $"recording/{Uri.EscapeDataString(sessionId)}/transcribe"
+                        ),
+                        new StringContent(
+                            "",
+                            Encoding.UTF8,
+                            "application/json"
+                        )
+                    );
+
+
+                if (!transcribeResponse.IsSuccessStatusCode)
+                {
+                    var error =
+                        await transcribeResponse.Content
+                            .ReadAsStringAsync();
+
+                    ShowUriError(
+                        "Huddle Scribe recording stopped, but transcription failed."
                         +
                         Environment.NewLine
                         +

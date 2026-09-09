@@ -194,6 +194,19 @@ sealed class LocalBridgeServer : IDisposable
                 return;
             }
 
+            if (request.Method == "POST" && segments[2] == "transcribe")
+            {
+                var result = await recordingService.SubmitForTranscriptionAsync(sessionId);
+                await WriteJsonAsync(stream, HttpStatusCode.OK, new
+                {
+                    success = result.Success,
+                    sessionId = result.SessionId,
+                    status = result.Status,
+                    transcript = result.Transcript
+                }, origin);
+                return;
+            }
+
             if (request.Method == "GET" && segments[2] == "audio")
             {
                 var session = recordingService.GetCompletedSession(sessionId);

@@ -1,10 +1,55 @@
 # Huddle Audio Capture
 
-Version `0.6.0`
+Version `0.7.0`
 
-Huddle Audio Capture is a Windows helper that captures local computer/system audio with WASAPI loopback and exposes a local-only HTTP bridge proof of concept.
+Huddle Audio Capture is a Windows helper that captures local computer/system audio with WASAPI loopback and exposes a local-only HTTP bridge.
 
-Phase 6A only proves that a local API can control the working recorder. It does not implement PCF, Azure Speech, SharePoint, Power Automate, or Power Apps business logic.
+Phase 6B makes Windows computer/system audio an alternate audio source for the existing Huddle AI Scribe transcription process. It does not replace the working Power Apps microphone path and does not add new AI Scribe parsing, SharePoint writes, Power Apps formulas, PCF, Microsoft Graph, or Teams transcription APIs.
+
+## Phase 6B - AI Scribe Alternate Audio Source
+
+Power Apps microphone recording remains supported in the existing app. The Windows helper adds an alternate path:
+
+```text
+Windows computer/system audio
+-> HuddleAudioCapture WAV recording
+-> existing TranscribeHuddleAudio Power Automate flow
+-> Azure Speech
+-> transcript returned to the Windows helper for diagnostics
+```
+
+Downstream AI Scribe logic remains unchanged.
+
+The helper continues to use the `huddlescribe://` custom protocol as the Power Apps -> Windows control mechanism:
+
+```text
+huddlescribe://start/<sessionId>
+huddlescribe://stop/<sessionId>
+```
+
+`huddlescribe://start/<sessionId>` sends a start command to the already-running local bridge. `huddlescribe://stop/<sessionId>` stops the matching recording through the local bridge, then asks the bridge to submit the finalized WAV to the configured transcription flow.
+
+PCF is not required for Phase 6B.
+
+## Transcription Configuration
+
+The Power Automate HTTP trigger URL is sensitive and must not be committed to GitHub.
+
+Configuration resolution order:
+
+1. Process environment variable: `HUDDLE_TRANSCRIPTION_FLOW_URL`
+2. User environment variable: `HUDDLE_TRANSCRIPTION_FLOW_URL`
+3. User configuration file: `%APPDATA%\HuddleAudioCapture\appsettings.json`
+
+Example user configuration file:
+
+```json
+{
+  "huddleTranscriptionFlowUrl": "<REDACTED>"
+}
+```
+
+An example template is included as `appsettings.example.json`.
 
 ## Local Bridge
 
@@ -61,6 +106,7 @@ POST   /recording/start
 POST   /recording/stop
 GET    /recording/{sessionId}/status
 GET    /recording/{sessionId}/audio
+POST   /recording/{sessionId}/transcribe
 DELETE /recording/{sessionId}
 ```
 
@@ -84,6 +130,17 @@ Stop request:
 
 ```text
 Content-Type: audio/wav
+```
+
+`POST /recording/{sessionId}/transcribe` submits the finalized WAV to the configured `TranscribeHuddleAudio` flow and returns:
+
+```json
+{
+  "success": true,
+  "sessionId": "<GUID>",
+  "status": "Transcription complete.",
+  "transcript": "<transcript text>"
+}
 ```
 
 Only one active recording is supported in Phase 6A. A second start request returns `409 Conflict`.
@@ -144,6 +201,18 @@ With Huddle Audio Capture running:
 .\test-local-bridge.ps1
 ```
 
+For the full Phase 6B recording and transcription path:
+
+```powershell
+.\test-phase-6b.ps1
+```
+
+Use `-SkipTranscription` to test only the Windows recording/bridge/audio portion when the Power Automate flow URL is not configured:
+
+```powershell
+.\test-phase-6b.ps1 -SkipTranscription
+```
+
 Or pass the token explicitly:
 
 ```powershell
@@ -176,3 +245,18 @@ Phase 6A is successful when:
 6. The downloaded WAV can be played and contains computer audio.
 7. `DELETE /recording/{sessionId}` removes the temporary recording.
 8. The existing manual recording controls still work.
+
+## Phase 6B Success Criteria
+
+Phase 6B is successful when:
+
+1. Huddle Audio Capture still records Windows system audio.
+2. `huddlescribe://start/{sessionId}` starts the correct recording.
+3. `huddlescribe://stop/{sessionId}` stops the correct recording.
+4. The resulting WAV is valid and contains audible computer audio.
+5. The recording can be submitted to the existing `TranscribeHuddleAudio` flow.
+6. The returned session ID matches the recording session ID.
+7. The transcript is non-empty.
+8. No new downstream AI Scribe logic is added to Windows.
+9. The helper remains localhost-only.
+10. Sensitive data is not logged.

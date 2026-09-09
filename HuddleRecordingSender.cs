@@ -12,6 +12,7 @@ interface IHuddleRecordingSender
 sealed class HuddleRecordingSender : IHuddleRecordingSender
 {
     private const string FlowUrlEnvironmentVariable = "HUDDLE_TRANSCRIPTION_FLOW_URL";
+    private const string DefaultLanguage = "en-US";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -42,13 +43,15 @@ sealed class HuddleRecordingSender : IHuddleRecordingSender
         }
 
         var flowUrl = ResolveFlowUrl();
+        BridgeLogger.Log($"Transcription submission started sessionId={sessionId} fileName=\"{fileInfo.Name}\" bytes={fileInfo.Length}");
+
         var audioBytes = await File.ReadAllBytesAsync(audioFilePath, cancellationToken);
         var base64Audio = Convert.ToBase64String(audioBytes);
 
         var request = new HuddleTranscriptionRequest(
             sessionId,
             Path.GetFileName(audioFilePath),
-            "en-US",
+            DefaultLanguage,
             base64Audio);
 
         var json = JsonSerializer.Serialize(request, JsonOptions);
@@ -63,6 +66,7 @@ sealed class HuddleRecordingSender : IHuddleRecordingSender
 
         if (!response.IsSuccessStatusCode)
         {
+            BridgeLogger.Log($"Transcription failed sessionId={sessionId} httpStatus={(int)response.StatusCode}");
             throw new InvalidOperationException(
                 $"Power Automate transcription request failed with HTTP {(int)response.StatusCode} {response.StatusCode}."
                 + Environment.NewLine
@@ -74,6 +78,7 @@ sealed class HuddleRecordingSender : IHuddleRecordingSender
 
         if (!transcriptionResponse.Success)
         {
+            BridgeLogger.Log($"Transcription failed sessionId={sessionId} powerAutomateSuccess=false");
             throw new InvalidOperationException(
                 "Power Automate transcription reported failure."
                 + Environment.NewLine
@@ -83,13 +88,22 @@ sealed class HuddleRecordingSender : IHuddleRecordingSender
         if (!string.IsNullOrWhiteSpace(transcriptionResponse.SessionId)
             && !string.Equals(transcriptionResponse.SessionId, sessionId, StringComparison.OrdinalIgnoreCase))
         {
+            BridgeLogger.Log($"Transcription failed sessionId={sessionId} reason=sessionIdMismatch");
             throw new InvalidOperationException(
                 $"Power Automate returned transcript for session '{transcriptionResponse.SessionId}', but expected '{sessionId}'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(transcriptionResponse.Transcript))
+        {
+            BridgeLogger.Log($"Transcription failed sessionId={sessionId} reason=emptyTranscript");
+            throw new InvalidOperationException("Power Automate returned an empty transcript.");
         }
 
         var status = string.IsNullOrWhiteSpace(transcriptionResponse.Status)
             ? "Transcription complete."
             : transcriptionResponse.Status;
+
+        BridgeLogger.Log($"Transcription completed sessionId={sessionId} transcriptChars={transcriptionResponse.Transcript.Length}");
 
         return new HuddleRecordingSendResult(
             true,
@@ -111,8 +125,13 @@ sealed class HuddleRecordingSender : IHuddleRecordingSender
 
         if (string.IsNullOrWhiteSpace(flowUrl))
         {
+            flowUrl = ReadFlowUrlFromConfigFile();
+        }
+
+        if (string.IsNullOrWhiteSpace(flowUrl))
+        {
             throw new InvalidOperationException(
-                $"Set {FlowUrlEnvironmentVariable} to the Power Automate HTTP trigger URL before sending recordings to Huddle.");
+                $"Set {FlowUrlEnvironmentVariable} or configure {AppInfo.UserConfigFilePath} before sending recordings to Huddle.");
         }
 
         if (!Uri.TryCreate(flowUrl, UriKind.Absolute, out var uri)
@@ -122,6 +141,27 @@ sealed class HuddleRecordingSender : IHuddleRecordingSender
         }
 
         return flowUrl;
+    }
+
+    private static string? ReadFlowUrlFromConfigFile()
+    {
+        if (!File.Exists(AppInfo.UserConfigFilePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(AppInfo.UserConfigFilePath);
+            var config = JsonSerializer.Deserialize<HuddleAudioCaptureConfig>(stream, JsonOptions);
+            return config?.HuddleTranscriptionFlowUrl?.Trim();
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException(
+                $"The Huddle Audio Capture configuration file is not valid JSON: {AppInfo.UserConfigFilePath}",
+                ex);
+        }
     }
 }
 
@@ -136,6 +176,8 @@ sealed record HuddleTranscriptionResponse(
     string? SessionId,
     string? Status,
     string? Transcript);
+
+sealed record HuddleAudioCaptureConfig(string? HuddleTranscriptionFlowUrl);
 
 sealed record HuddleRecordingSendResult(
     bool Success,

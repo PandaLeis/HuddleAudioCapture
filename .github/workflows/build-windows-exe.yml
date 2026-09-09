@@ -39,6 +39,8 @@ jobs:
         run: |
           Copy-Item install-huddlescribe-protocol.ps1 publish/win-x64/
           Copy-Item diagnose-huddlescribe.ps1 publish/win-x64/
+          Copy-Item test-phase-6b.ps1 publish/win-x64/
+          Copy-Item appsettings.example.json publish/win-x64/
           Copy-Item README.md publish/win-x64/
 
       - name: Create zip package

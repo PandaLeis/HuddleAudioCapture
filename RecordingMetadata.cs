@@ -18,7 +18,11 @@ static class RecordingMetadata
             session.FileName,
             session.DeviceName,
             Math.Round(session.Duration.TotalSeconds, 2),
-            session.AudibleAudioDetected);
+            session.AudibleAudioDetected,
+            session.TranscriptionStatus,
+            session.TranscriptionCompletedAt,
+            string.IsNullOrWhiteSpace(session.Transcript) ? null : session.Transcript,
+            string.IsNullOrWhiteSpace(session.TranscriptionError) ? null : session.TranscriptionError);
 
         await using var stream = File.Create(session.MetadataFilePath);
         await JsonSerializer.SerializeAsync(stream, metadata, JsonOptions, cancellationToken);
@@ -31,5 +35,9 @@ static class RecordingMetadata
         string FileName,
         string DeviceName,
         double DurationSeconds,
-        bool AudibleAudioDetected);
+        bool AudibleAudioDetected,
+        string TranscriptionStatus,
+        DateTimeOffset? TranscriptionCompletedAt,
+        string? Transcript,
+        string? TranscriptionError);
 }

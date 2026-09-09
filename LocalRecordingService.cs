@@ -5,6 +5,7 @@ sealed class LocalRecordingService : IDisposable
     private readonly object sync = new();
     private readonly MMDeviceEnumerator enumerator = new();
     private readonly Dictionary<string, RecordingSession> sessions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IHuddleRecordingSender huddleSender = new HuddleRecordingSender();
     private LoopbackRecorder? activeRecorder;
     private RecordingSession? activeSession;
     private float currentPeak;
@@ -156,6 +157,7 @@ sealed class LocalRecordingService : IDisposable
         }
 
         BridgeLogger.Log($"Recording stop sessionId={session.SessionId} durationMs={(long)session.Duration.TotalMilliseconds} bytes={fileInfo.Length}");
+        BridgeLogger.Log($"Recording finalized sessionId={session.SessionId} audioReady=true audible={session.AudibleAudioDetected}");
         StateChanged?.Invoke();
 
         return new RecordingStopResult(
@@ -164,6 +166,54 @@ sealed class LocalRecordingService : IDisposable
             "ready",
             (long)session.Duration.TotalMilliseconds,
             session.AudibleAudioDetected);
+    }
+
+    public async Task<HuddleRecordingSendResult> SubmitForTranscriptionAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        RecordingSession session;
+
+        lock (sync)
+        {
+            session = GetCompletedSessionUnsafe(sessionId);
+
+            if (!session.AudibleAudioDetected)
+            {
+                throw new InvalidOperationException("No audible audio was detected. Record audio before sending to Huddle.");
+            }
+
+            session.MarkTranscriptionStarted();
+        }
+
+        BridgeLogger.Log($"Recording ready for transcription sessionId={session.SessionId}");
+        StateChanged?.Invoke();
+
+        try
+        {
+            var result = await huddleSender.SendAsync(session.AudioFilePath, session.SessionId, cancellationToken);
+
+            lock (sync)
+            {
+                session.MarkTranscriptionComplete(result.Status, result.Transcript);
+            }
+
+            await RecordingMetadata.WriteAsync(session, cancellationToken);
+            StateChanged?.Invoke();
+            return result;
+        }
+        catch (Exception ex)
+        {
+            lock (sync)
+            {
+                session.MarkTranscriptionFailed(ex.Message);
+            }
+
+            BridgeLogger.Log($"Transcription failed sessionId={session.SessionId} error=\"{ex.Message}\"");
+            await RecordingMetadata.WriteAsync(session, cancellationToken);
+            StateChanged?.Invoke();
+            throw;
+        }
     }
 
     public RecordingStatusResult GetStatus(string sessionId)
@@ -197,17 +247,7 @@ sealed class LocalRecordingService : IDisposable
 
         lock (sync)
         {
-            if (!sessions.TryGetValue(sessionId, out var session))
-            {
-                throw new FileNotFoundException("Recording session was not found.");
-            }
-
-            if (session.StoppedAt is null)
-            {
-                throw new InvalidOperationException("Recording is not complete.");
-            }
-
-            return session;
+            return GetCompletedSessionUnsafe(sessionId);
         }
     }
 
@@ -261,6 +301,29 @@ sealed class LocalRecordingService : IDisposable
         {
             throw new ArgumentException("sessionId must be a valid GUID.");
         }
+    }
+
+    private RecordingSession GetCompletedSessionUnsafe(string sessionId)
+    {
+        ValidateSessionId(sessionId);
+
+        if (!sessions.TryGetValue(sessionId, out var session))
+        {
+            throw new FileNotFoundException("Recording session was not found.");
+        }
+
+        if (session.StoppedAt is null)
+        {
+            throw new InvalidOperationException("Recording is not complete.");
+        }
+
+        var fileInfo = new FileInfo(session.AudioFilePath);
+        if (!fileInfo.Exists || fileInfo.Length == 0)
+        {
+            throw new InvalidOperationException("The recording file is empty or was not created.");
+        }
+
+        return session;
     }
 }
 

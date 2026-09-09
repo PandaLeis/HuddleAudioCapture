@@ -20,7 +20,6 @@ sealed class MainForm : Form
     private readonly ProgressBar peakProgressBar = new();
     private readonly TextBox transcriptTextBox = new();
     private readonly System.Windows.Forms.Timer durationTimer = new();
-    private readonly IHuddleRecordingSender huddleSender = new HuddleRecordingSender();
     private readonly LocalRecordingService recordingService = new();
     private readonly string bridgeToken = BridgeToken.Create();
 
@@ -375,7 +374,7 @@ sealed class MainForm : Form
             startButton.Enabled = false;
             newButton.Enabled = false;
 
-            var result = await huddleSender.SendAsync(currentSession.AudioFilePath, currentSession.SessionId);
+            var result = await recordingService.SubmitForTranscriptionAsync(currentSession.SessionId);
             transcriptTextBox.Text = result.Transcript;
             SetStatus("Transcription Complete");
             MessageBox.Show("Transcription completed successfully.", "Huddle Audio Capture", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -463,9 +462,37 @@ sealed class MainForm : Form
 
         BeginInvoke(() =>
         {
-            var active = recordingService.ActiveSession;
-            sessionValueLabel.Text = active?.SessionId ?? sessionValueLabel.Text;
-            fileValueLabel.Text = active?.AudioFilePath ?? fileValueLabel.Text;
+            try
+            {
+                var active = recordingService.ActiveSession;
+                sessionValueLabel.Text = active?.SessionId ?? sessionValueLabel.Text;
+                fileValueLabel.Text = active?.AudioFilePath ?? fileValueLabel.Text;
+
+                if (currentSession is not null)
+                {
+                    var session = active?.SessionId.Equals(currentSession.SessionId, StringComparison.OrdinalIgnoreCase) == true
+                        ? active
+                        : recordingService.GetCompletedSession(currentSession.SessionId);
+
+                    if (!string.IsNullOrWhiteSpace(session.Transcript))
+                    {
+                        transcriptTextBox.Text = session.Transcript;
+                        SetStatus("Transcription Complete");
+                    }
+                    else if (session.TranscriptionStatus == "transcribing")
+                    {
+                        SetStatus("Transcribing...");
+                    }
+                    else if (session.TranscriptionStatus == "failed")
+                    {
+                        SetStatus("Error");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                BridgeLogger.Log($"UI transcription refresh failed: {ex.Message}");
+            }
         });
     }
 

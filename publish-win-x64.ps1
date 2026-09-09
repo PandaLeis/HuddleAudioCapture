@@ -38,4 +38,10 @@ Assert-Success "dotnet build"
     -o $publishDir
 Assert-Success "dotnet publish"
 
+Copy-Item -LiteralPath (Join-Path $projectRoot "install-huddlescribe-protocol.ps1") -Destination $publishDir -Force
+Copy-Item -LiteralPath (Join-Path $projectRoot "diagnose-huddlescribe.ps1") -Destination $publishDir -Force
+Copy-Item -LiteralPath (Join-Path $projectRoot "test-phase-6b.ps1") -Destination $publishDir -Force
+Copy-Item -LiteralPath (Join-Path $projectRoot "appsettings.example.json") -Destination $publishDir -Force
+Copy-Item -LiteralPath (Join-Path $projectRoot "README.md") -Destination $publishDir -Force
+
 Write-Host "Published to: $publishDir"

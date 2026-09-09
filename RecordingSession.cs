@@ -25,6 +25,14 @@ sealed class RecordingSession
 
     public bool AudibleAudioDetected { get; private set; }
 
+    public string TranscriptionStatus { get; private set; } = "not_started";
+
+    public string Transcript { get; private set; } = "";
+
+    public string TranscriptionError { get; private set; } = "";
+
+    public DateTimeOffset? TranscriptionCompletedAt { get; private set; }
+
     public TimeSpan Duration => (StoppedAt ?? DateTimeOffset.UtcNow) - StartedAt;
 
     public string MetadataFilePath => Path.ChangeExtension(AudioFilePath, ".json");
@@ -35,5 +43,25 @@ sealed class RecordingSession
     {
         AudibleAudioDetected = audibleAudioDetected;
         StoppedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void MarkTranscriptionStarted()
+    {
+        TranscriptionStatus = "transcribing";
+        TranscriptionError = "";
+    }
+
+    public void MarkTranscriptionComplete(string status, string transcript)
+    {
+        TranscriptionStatus = string.IsNullOrWhiteSpace(status) ? "complete" : status;
+        Transcript = transcript;
+        TranscriptionError = "";
+        TranscriptionCompletedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void MarkTranscriptionFailed(string error)
+    {
+        TranscriptionStatus = "failed";
+        TranscriptionError = error;
     }
 }
