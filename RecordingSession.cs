@@ -27,6 +27,8 @@ sealed class RecordingSession
 
     public string TranscriptionStatus { get; private set; } = "not_started";
 
+    public string TranscriptionFlowStatus { get; private set; } = "";
+
     public string Transcript { get; private set; } = "";
 
     public string TranscriptionError { get; private set; } = "";
@@ -48,12 +50,15 @@ sealed class RecordingSession
     public void MarkTranscriptionStarted()
     {
         TranscriptionStatus = "transcribing";
+        TranscriptionFlowStatus = "";
         TranscriptionError = "";
+        TranscriptionCompletedAt = null;
     }
 
-    public void MarkTranscriptionComplete(string status, string transcript)
+    public void MarkTranscriptionComplete(string flowStatus, string transcript)
     {
-        TranscriptionStatus = string.IsNullOrWhiteSpace(status) ? "complete" : status;
+        TranscriptionStatus = "complete";
+        TranscriptionFlowStatus = flowStatus;
         Transcript = transcript;
         TranscriptionError = "";
         TranscriptionCompletedAt = DateTimeOffset.UtcNow;
@@ -62,6 +67,8 @@ sealed class RecordingSession
     public void MarkTranscriptionFailed(string error)
     {
         TranscriptionStatus = "failed";
+        TranscriptionFlowStatus = "";
         TranscriptionError = error;
+        TranscriptionCompletedAt = null;
     }
 }

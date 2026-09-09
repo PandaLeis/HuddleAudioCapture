@@ -189,7 +189,9 @@ sealed class LocalBridgeServer : IDisposable
                     durationMilliseconds = result.DurationMilliseconds,
                     peak = result.Peak,
                     audioReady = result.AudioReady,
-                    hasAudibleAudio = result.HasAudibleAudio
+                    hasAudibleAudio = result.HasAudibleAudio,
+                    transcriptionStatus = result.TranscriptionStatus,
+                    transcriptAvailable = result.TranscriptAvailable
                 }, origin);
                 return;
             }

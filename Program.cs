@@ -274,6 +274,8 @@ internal static class Program
             // --------------------------------------------------------
             if (command == "start")
             {
+                BridgeLogger.Log($"Protocol start received sessionId={sessionId}");
+
                 using var response =
                     await http.PostAsync(
                         BuildBridgeUrl(
@@ -311,6 +313,8 @@ internal static class Program
             // --------------------------------------------------------
             if (command == "stop")
             {
+                BridgeLogger.Log($"Protocol stop received sessionId={sessionId}");
+
                 using var response =
                     await http.PostAsync(
                         BuildBridgeUrl(

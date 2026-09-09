@@ -31,6 +31,37 @@ huddlescribe://stop/<sessionId>
 
 PCF is not required for Phase 6B.
 
+## Phase 6C - Transcript Handoff Architecture
+
+Phase 6C keeps Windows focused on capture and transcription submission. HuddleAudioCapture does not directly set a Power Apps variable and does not write directly to SharePoint.
+
+```text
+Power Apps creates sessionId
+-> Windows captures audio
+-> existing TranscribeHuddleAudio Power Automate flow transcribes audio
+-> Flow stores transcript in a cloud staging record keyed by sessionId
+-> Power Apps retrieves transcript by sessionId
+-> existing AI Scribe logic continues
+```
+
+HuddleAudioCapture requires no SharePoint credentials and does not write directly to SharePoint.
+
+The transcript returned to the Windows helper remains available for diagnostics. It does not replace the cloud staging record that Power Apps will retrieve by `sessionId`.
+
+The Windows-to-Flow request contract is:
+
+```json
+{
+  "sessionId": "<GUID>",
+  "fileName": "HuddleRecording_<GUID>.wav",
+  "language": "en-US",
+  "source": "ComputerAudio",
+  "audioBase64": "<base64 WAV>"
+}
+```
+
+The `source` field is an explicit Phase 6C source indicator. The existing Flow should treat it as optional metadata and continue accepting the original request fields.
+
 ## Transcription Configuration
 
 The Power Automate HTTP trigger URL is sensitive and must not be committed to GitHub.

@@ -20,6 +20,7 @@ static class RecordingMetadata
             Math.Round(session.Duration.TotalSeconds, 2),
             session.AudibleAudioDetected,
             session.TranscriptionStatus,
+            string.IsNullOrWhiteSpace(session.TranscriptionFlowStatus) ? null : session.TranscriptionFlowStatus,
             session.TranscriptionCompletedAt,
             string.IsNullOrWhiteSpace(session.Transcript) ? null : session.Transcript,
             string.IsNullOrWhiteSpace(session.TranscriptionError) ? null : session.TranscriptionError);
@@ -37,6 +38,7 @@ static class RecordingMetadata
         double DurationSeconds,
         bool AudibleAudioDetected,
         string TranscriptionStatus,
+        string? TranscriptionFlowStatus,
         DateTimeOffset? TranscriptionCompletedAt,
         string? Transcript,
         string? TranscriptionError);

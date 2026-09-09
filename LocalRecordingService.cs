@@ -183,6 +183,23 @@ sealed class LocalRecordingService : IDisposable
                 throw new InvalidOperationException("No audible audio was detected. Record audio before sending to Huddle.");
             }
 
+            if (session.TranscriptionStatus == "transcribing")
+            {
+                throw new InvalidOperationException("A transcription request is already running for this recording.");
+            }
+
+            if (session.TranscriptionStatus == "complete" && !string.IsNullOrWhiteSpace(session.Transcript))
+            {
+                BridgeLogger.Log($"Transcription already complete sessionId={session.SessionId} transcriptChars={session.Transcript.Length}");
+                return new HuddleRecordingSendResult(
+                    true,
+                    "Transcription already completed.",
+                    session.AudioFilePath,
+                    session.SessionId,
+                    string.IsNullOrWhiteSpace(session.TranscriptionFlowStatus) ? "Transcription complete." : session.TranscriptionFlowStatus,
+                    session.Transcript);
+            }
+
             session.MarkTranscriptionStarted();
         }
 
@@ -237,7 +254,9 @@ sealed class LocalRecordingService : IDisposable
                 (long)session.Duration.TotalMilliseconds,
                 currentPeak,
                 session.StoppedAt is not null,
-                session.AudibleAudioDetected);
+                session.AudibleAudioDetected,
+                session.TranscriptionStatus,
+                !string.IsNullOrWhiteSpace(session.Transcript));
         }
     }
 
@@ -344,4 +363,6 @@ sealed record RecordingStatusResult(
     long DurationMilliseconds,
     float Peak,
     bool AudioReady,
-    bool HasAudibleAudio);
+    bool HasAudibleAudio,
+    string TranscriptionStatus,
+    bool TranscriptAvailable);

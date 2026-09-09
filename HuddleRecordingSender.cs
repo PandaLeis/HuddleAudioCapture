@@ -13,6 +13,7 @@ sealed class HuddleRecordingSender : IHuddleRecordingSender
 {
     private const string FlowUrlEnvironmentVariable = "HUDDLE_TRANSCRIPTION_FLOW_URL";
     private const string DefaultLanguage = "en-US";
+    private const string Source = "ComputerAudio";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -52,6 +53,7 @@ sealed class HuddleRecordingSender : IHuddleRecordingSender
             sessionId,
             Path.GetFileName(audioFilePath),
             DefaultLanguage,
+            Source,
             base64Audio);
 
         var json = JsonSerializer.Serialize(request, JsonOptions);
@@ -63,6 +65,7 @@ sealed class HuddleRecordingSender : IHuddleRecordingSender
 
         using var response = await http.PostAsync(flowUrl, content, cancellationToken);
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        BridgeLogger.Log($"Transcription response received sessionId={sessionId} httpStatus={(int)response.StatusCode}");
 
         if (!response.IsSuccessStatusCode)
         {
@@ -169,6 +172,7 @@ sealed record HuddleTranscriptionRequest(
     string SessionId,
     string FileName,
     string Language,
+    string Source,
     string AudioBase64);
 
 sealed record HuddleTranscriptionResponse(
