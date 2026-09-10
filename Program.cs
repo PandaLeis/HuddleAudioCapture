@@ -58,8 +58,8 @@ internal static class Program
             &&
             args[0].Equals(
                 "--bridge",
-                StringComparson.OrdinalIgnoreCase
-             )
+                StringComparison.OrdinalIgnoreCase
+            )
         )
         {
             return await RunBridgeOnlyAsync();
@@ -74,9 +74,9 @@ internal static class Program
             if (
                 args[0].Equals(
                     "--cli",
-                    StringComparson.OrdinalIgnoreCase
+                    StringComparison.OrdinalIgnoreCase
                 )
-             )
+            )
             {
                 args = args.Skip(1).ToArray();
             }
