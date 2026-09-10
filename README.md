@@ -31,6 +31,8 @@ huddlescribe://stop/<sessionId>
 
 PCF is not required for Phase 6B.
 
+If a protocol command is received while the helper UI is not already running, the short-lived protocol process launches the normal helper UI, waits for the localhost bridge to become ready, and then forwards the command. A named mutex prevents multiple normal helper UI instances from running at the same time.
+
 ## Phase 6C - Transcript Handoff Architecture
 
 Phase 6C keeps Windows focused on capture and transcription submission. HuddleAudioCapture does not directly set a Power Apps variable and does not write directly to SharePoint.
@@ -81,6 +83,18 @@ Example user configuration file:
 ```
 
 An example template is included as `appsettings.example.json`.
+
+The publish output includes `install-huddlescribe-protocol.ps1`. To register the protocol and write production transcription configuration:
+
+```powershell
+.\install-huddlescribe-protocol.ps1 -TranscriptionFlowUrl "<REDACTED>"
+```
+
+To remove the per-user protocol registration:
+
+```powershell
+.\install-huddlescribe-protocol.ps1 -Uninstall
+```
 
 ## Local Bridge
 
@@ -263,6 +277,21 @@ The script:
 9. Prints the file size
 10. Leaves the WAV available for playback testing
 11. Deletes the temporary bridge recording only if you confirm
+
+Manual URI validation:
+
+```text
+huddlescribe://start/<GUID>
+huddlescribe://stop/<GUID>
+huddlescribe://invalid/<GUID>
+```
+
+Expected behavior:
+
+1. `start` launches or reuses the helper and begins computer-audio capture.
+2. `stop` stops the matching session and submits it for transcription.
+3. Invalid commands are rejected and logged without starting a recording.
+4. A second normal helper launch exits without creating another bridge/recorder instance.
 
 ## Phase 6A Success Criteria
 

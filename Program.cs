@@ -3,7 +3,9 @@ using System.Text.Json;
 
 internal static class Program
 {
+    private const string SingleInstanceMutexName = "Local\\HuddleAudioCapture.WindowsHelper";
     private const string TokenHeader = "X-Huddle-Bridge-Token";
+    private static readonly TimeSpan BridgeStartupTimeout = TimeSpan.FromSeconds(20);
 
     [STAThread]
     private static async Task<int> Main(string[] args)
@@ -44,10 +46,7 @@ internal static class Program
             )
         )
         {
-            ApplicationConfiguration.Initialize();
-            Application.Run(new MainForm());
-
-            return 0;
+            return RunUi();
         }
 
 
@@ -89,10 +88,7 @@ internal static class Program
         // ============================================================
         // DEFAULT = WINDOWS UI
         // ============================================================
-        ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm());
-
-        return 0;
+        return RunUi();
     }
 
 
@@ -164,35 +160,31 @@ internal static class Program
                 return 1;
             }
 
-            BridgeLogger.Log($"Protocol command received command={command} sessionId={sessionId}");
-
-
-            // --------------------------------------------------------
-            // TOKEN FILE EXISTS WHILE THE MAIN HELPER / BRIDGE
-            // IS RUNNING.
-            // --------------------------------------------------------
-            if (
-                !File.Exists(
-                    AppInfo.BridgeTokenFilePath
-                )
-            )
+            if (!Guid.TryParse(sessionId, out _))
             {
                 ShowUriError(
-                    "Huddle Audio Capture is not running.\n\n"
-                    +
-                    "Start Huddle Audio Capture and try again."
+                    "The Huddle Scribe session ID was not valid."
                 );
+
+                BridgeLogger.Log($"Protocol command rejected invalid sessionId=\"{sessionId}\"");
 
                 return 1;
             }
 
+            BridgeLogger.Log($"Protocol command received command={command} sessionId={sessionId}");
+
+
+            // --------------------------------------------------------
+            // TOKEN FILE EXISTS WHILE THE MAIN HELPER / BRIDGE IS
+            // RUNNING. IF THE PROTOCOL LAUNCHED THIS SHORT-LIVED
+            // PROCESS FIRST, START THE UI HELPER AND WAIT FOR THE
+            // LOCAL BRIDGE.
+            // --------------------------------------------------------
+            await EnsureHelperIsRunningAsync();
+
 
             var bridgeToken =
-                (
-                    await File.ReadAllTextAsync(
-                        AppInfo.BridgeTokenFilePath
-                    )
-                ).Trim();
+                await ReadBridgeTokenAsync();
 
 
             if (string.IsNullOrWhiteSpace(bridgeToken))
@@ -396,6 +388,135 @@ internal static class Program
 
             return 1;
         }
+    }
+
+
+    // ================================================================
+    // NORMAL UI ENTRYPOINT
+    // ================================================================
+    private static int RunUi()
+    {
+        using var mutex =
+            new Mutex(
+                initiallyOwned: true,
+                name: SingleInstanceMutexName,
+                createdNew: out var createdNew
+            );
+
+        if (!createdNew)
+        {
+            BridgeLogger.Log("UI launch ignored because another helper instance is already running.");
+            return 0;
+        }
+
+        BridgeLogger.Log("Application startup");
+        ApplicationConfiguration.Initialize();
+        Application.Run(new MainForm());
+
+        return 0;
+    }
+
+
+    private static async Task EnsureHelperIsRunningAsync()
+    {
+        if (await BridgeIsReadyAsync())
+        {
+            return;
+        }
+
+        BridgeLogger.Log("Local bridge unavailable; launching UI helper for protocol command.");
+
+        try
+        {
+            using var _ = System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = Environment.ProcessPath ?? Application.ExecutablePath,
+                    Arguments = "--ui",
+                    UseShellExecute = true
+                });
+        }
+        catch (Exception ex)
+        {
+            BridgeLogger.Log($"Unable to launch UI helper: {ex.Message}");
+            throw new InvalidOperationException(
+                "Huddle Audio Capture could not be started.",
+                ex);
+        }
+
+        var deadline =
+            DateTimeOffset.UtcNow.Add(BridgeStartupTimeout);
+
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            await Task.Delay(500);
+
+            if (await BridgeIsReadyAsync())
+            {
+                return;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "Huddle Audio Capture started, but its local bridge did not become ready in time.");
+    }
+
+
+    private static async Task<bool> BridgeIsReadyAsync()
+    {
+        if (!File.Exists(AppInfo.BridgeTokenFilePath))
+        {
+            return false;
+        }
+
+        var bridgeToken = await ReadBridgeTokenAsync();
+        if (string.IsNullOrWhiteSpace(bridgeToken))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var handler =
+                new HttpClientHandler
+                {
+                    UseProxy = false
+                };
+
+            using var http =
+                new HttpClient(handler)
+                {
+                    Timeout = TimeSpan.FromSeconds(2)
+                };
+
+            http.DefaultRequestHeaders.Add(TokenHeader, bridgeToken);
+
+            using var healthResponse =
+                await http.GetAsync(BuildBridgeUrl("health"));
+
+            return healthResponse.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            BridgeLogger.Log($"Local bridge readiness check failed: {ex.Message}");
+            return false;
+        }
+    }
+
+
+    private static async Task<string> ReadBridgeTokenAsync()
+    {
+        if (!File.Exists(AppInfo.BridgeTokenFilePath))
+        {
+            return "";
+        }
+
+        return
+            (
+                await File.ReadAllTextAsync(
+                    AppInfo.BridgeTokenFilePath
+                )
+            ).Trim();
     }
 
 
