@@ -64,6 +64,15 @@ The Windows-to-Flow request contract is:
 
 The `source` field is an explicit Phase 6C source indicator. The existing Flow should treat it as optional metadata and continue accepting the original request fields.
 
+Detailed implementation notes are included in:
+
+```text
+POWER_AUTOMATE_TRANSCRIPT_STAGING.md
+POWER_APPS_TRANSCRIPT_HANDOFF.md
+```
+
+The Power Automate flow should create or update one `Huddle_AIScribeTranscript` staging record keyed by `AIScribe_SessionID`. Power Apps should poll that list by `varAIScribeSessionID`, set `varAIScribeTranscript` when the record reaches `Complete`, and then call the existing `btnAIScribeAnalyzeDiscussion` once for that session.
+
 ## Transcription Configuration
 
 The Power Automate HTTP trigger URL is sensitive and must not be committed to GitHub.

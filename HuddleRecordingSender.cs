@@ -106,6 +106,16 @@ sealed class HuddleRecordingSender : IHuddleRecordingSender
             ? "Transcription complete."
             : transcriptionResponse.Status;
 
+        if (!string.IsNullOrWhiteSpace(transcriptionResponse.StagingStatus))
+        {
+            BridgeLogger.Log($"Transcription staging sessionId={sessionId} status=\"{transcriptionResponse.StagingStatus}\"");
+        }
+
+        if (!string.IsNullOrWhiteSpace(transcriptionResponse.StagingRecordId))
+        {
+            BridgeLogger.Log($"Transcription staging sessionId={sessionId} recordId=\"{transcriptionResponse.StagingRecordId}\"");
+        }
+
         BridgeLogger.Log($"Transcription completed sessionId={sessionId} transcriptChars={transcriptionResponse.Transcript.Length}");
 
         return new HuddleRecordingSendResult(
@@ -114,7 +124,9 @@ sealed class HuddleRecordingSender : IHuddleRecordingSender
             audioFilePath,
             sessionId,
             status,
-            transcriptionResponse.Transcript ?? "");
+            transcriptionResponse.Transcript ?? "",
+            transcriptionResponse.StagingStatus ?? "",
+            transcriptionResponse.StagingRecordId ?? "");
     }
 
     private static string ResolveFlowUrl()
@@ -179,7 +191,9 @@ sealed record HuddleTranscriptionResponse(
     bool Success,
     string? SessionId,
     string? Status,
-    string? Transcript);
+    string? Transcript,
+    string? StagingStatus,
+    string? StagingRecordId);
 
 sealed record HuddleAudioCaptureConfig(string? HuddleTranscriptionFlowUrl);
 
@@ -189,4 +203,6 @@ sealed record HuddleRecordingSendResult(
     string AudioFilePath,
     string SessionId,
     string Status,
-    string Transcript);
+    string Transcript,
+    string StagingStatus = "",
+    string StagingRecordId = "");
