@@ -58,8 +58,8 @@ internal static class Program
             &&
             args[0].Equals(
                 "--bridge",
-                StringComparison.OrdinalIgnoreCase
-            )
+                StringComparson.OrdinalIgnoreCase
+             )
         )
         {
             return await RunBridgeOnlyAsync();
@@ -74,9 +74,9 @@ internal static class Program
             if (
                 args[0].Equals(
                     "--cli",
-                    StringComparison.OrdinalIgnoreCase
+                    StringComparson.OrdinalIgnoreCase
                 )
-            )
+             )
             {
                 args = args.Skip(1).ToArray();
             }
@@ -610,6 +610,8 @@ internal static class Program
 
         bridgeServer.Start();
 
+        BridgeLogger.Log($"Bridge-only mode started url={bridgeServer.Url} version={AppInfo.Version}");
+        BridgeLogger.Log($"Bridge-only token file={AppInfo.BridgeTokenFilePath}");
 
         Console.WriteLine(
             $"Local bridge running: {bridgeServer.Url}"

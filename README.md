@@ -33,6 +33,8 @@ PCF is not required for Phase 6B.
 
 If a protocol command is received while the helper UI is not already running, the short-lived protocol process launches the normal helper UI, waits for the localhost bridge to become ready, and then forwards the command. A named mutex prevents multiple normal helper UI instances from running at the same time.
 
+The Windows helper is built as a Windows Forms executable (`WinExe`) so `huddlescribe://` protocol activation does not show a black console window. Operational diagnostics should be read from the helper UI and `%TEMP%\HuddleAudioCapture\bridge.log`, not from console output.
+
 ## Phase 6C - Transcript Handoff Architecture
 
 Phase 6C keeps Windows focused on capture and transcription submission. HuddleAudioCapture does not directly set a Power Apps variable and does not write directly to SharePoint.
